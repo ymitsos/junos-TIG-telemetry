@@ -1,0 +1,104 @@
+version: "3.3"
+
+services:
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    networks:
+      - telemetry
+    depends_on:
+      - influxdb
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.grafana.entryPoints=port443"
+      - "traefik.http.routers.grafana.rule=Host(`YOUR_FQDN_HERE_eg_www.example.com`)"
+      - "traefik.http.routers.grafana.tls=true"
+      - "traefik.http.routers.grafana.tls.certResolver=ssl"
+      - "traefik.http.routers.grafana.service=grafana"
+      - "traefik.http.services.grafana.loadBalancer.server.port=3000"
+    volumes:
+      - grafana-storage:/var/lib/grafana
+      - ./config/grafana/grafana.ini:/etc/grafana/grafana.ini:ro
+    restart: always
+
+  influxdb:
+    image: influxdb:latest
+    container_name: influxdb
+    networks:
+      - telemetry
+    env_file: 
+      - configuration.env
+    expose:
+      - 8086
+    volumes:
+      - influxdb-storage:/var/lib/influxdb 
+      - ./config/influxdb:/etc/influxdb/influxdb.conf:ro
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.influxdb.entryPoints=port8086"
+      - "traefik.http.routers.influxdb.rule=Host(`YOUR_FQDN_HERE_eg_www.example.com`)"
+      - "traefik.http.routers.influxdb.service=influxdb"
+      - "traefik.http.services.influxdb.loadBalancer.server.port=8086"
+    restart: always
+
+  influxdb_cli:
+    image: influxdb:latest
+    networks:
+      - telemetry
+    env_file: 
+      - configuration.env
+    entrypoint: ["./entrypoint.sh"]
+    restart: on-failure:10
+    depends_on:
+      - influxdb
+
+  telegraf:
+    image: telegraf:latest
+    container_name: telegraf
+    networks:
+      - telemetry
+    env_file: 
+      - configuration.env
+    depends_on:
+      - influxdb
+    volumes:
+      - ./config/telegraf/telegraf.conf:/etc/telegraf/telegraf.conf:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /sys:/rootfs/sys:ro
+      - /proc:/rootfs/proc:ro
+      - /etc:/rootfs/etc:ro
+    restart: always
+
+  traefik:
+    image: traefik:v2.5
+    container_name: traefik
+    networks:
+      - telemetry
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8086:8086"
+    command:
+      - "--log.level=INFO"
+      - "--api=true"
+      - "--api.dashboard=true"
+      - "--providers.docker=true"
+      - "--entryPoints.port443.address=:443"
+      - "--entryPoints.port80.address=:80"
+      - "--entryPoints.port8086.address=:8086"
+      - "--certificatesResolvers.ssl.acme.tlsChallenge=true"
+      - "--certificatesResolvers.ssl.acme.email=AN_EMAIL_ADDRESS_HERE"
+      - "--certificatesResolvers.ssl.acme.storage=/letsencrypt/acme.json"
+    labels:
+      - "traefik.enable=true"
+    volumes:
+      - traefik-storage:/letsencrypt/
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: always
+
+networks:
+  telemetry:
+volumes:
+  traefik-storage:
+  grafana-storage:
+  influxdb-storage:
