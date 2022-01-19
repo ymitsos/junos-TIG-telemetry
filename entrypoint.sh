@@ -1,4 +1,4 @@
-# refef to: https://www.influxdata.com/blog/running-influxdb-2-0-and-telegraf-using-docker/ 
+# refer to: https://www.influxdata.com/blog/running-influxdb-2-0-and-telegraf-using-docker/ 
 
 #!/bin/bash
 set -eu -o pipefail
